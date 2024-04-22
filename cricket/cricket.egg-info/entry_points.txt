@@ -1,0 +1,4 @@
+[console_scripts]
+cricket-django = cricket.django.__main__:main
+cricket-unittest = cricket.unittest.__main__:main
+

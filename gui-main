@@ -1,0 +1,12 @@
+#!/bin/bash -e
+
+ROOT=$(dirname "$(readlink -f "$0")")
+
+export QT_QPA_PLATFORM=wayland
+export QT_QPA_PLATFORM_PLUGIN_PATH=/usr/lib/qt/plugins/platforms
+
+export PYTHONPATH=$ROOT:$ROOT/cricket
+
+pushd $ROOT/tests > /dev/null
+python -m cricket.unittest
+popd > /dev/null

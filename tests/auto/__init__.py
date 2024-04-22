@@ -1,0 +1,1 @@
+MODULE_NAME = {'zh': '自动测试项', 'en': 'Auto Test Item'}

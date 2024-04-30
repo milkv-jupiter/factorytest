@@ -27,6 +27,7 @@ class USB4GModuleTest(TestCase):
                                   text=True, timeout=timeout)
             print(f'Create mmcli subprocess return {proc.returncode}')
             self.assertEqual(proc.returncode, 0)
-            self.assertNotIn(proc.stdout, 'sim-missing')
+            if 'sim-missing' in proc.stdout:
+                self.fail('sim-card missing')
         except:
             self.fail('Create mmcli subprocess failed')

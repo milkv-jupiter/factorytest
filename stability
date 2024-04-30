@@ -1,0 +1,8 @@
+#!/bin/bash -e
+
+ROOT=$(dirname "$(readlink -f "$0")")
+
+pushd $ROOT > /dev/null
+./stress-ng.sh &
+./memtester.sh &
+popd > /dev/null

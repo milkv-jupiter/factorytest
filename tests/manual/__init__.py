@@ -1,1 +1,1 @@
-MODULE_NAME = {'zh': '手动测试项', 'en': 'Manual Test Item'}
+MODULE_NAME = {'zh': '人工判断项', 'en': 'Manual Test Item'}

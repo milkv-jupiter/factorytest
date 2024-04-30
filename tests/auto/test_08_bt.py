@@ -15,9 +15,13 @@ class BTTest(TestCase):
     }
 
     def test_scan(self):
-        scan = 'hcitool -i hci0 scan'
+        # timeout: length * 1.28s
+        # devices: numrsp
+        scan = 'hcitool -i hci0 scan --length=5 --numrsp=1'
         try:
-            result = subprocess.run(scan, capture_output=True, shell=True, timeout=10)
-            self.assertEqual(result.returncode, 0)
+            proc = subprocess.run(scan, capture_output=True, text=True, shell=True, timeout=10)
+            print(proc.stdout)
+            self.assertEqual(proc.returncode, 0)
+            self.assertGreater(len(proc.stdout.splitlines()), 1)
         except subprocess.TimeoutExpired:
             self.fail('Scan timeout')

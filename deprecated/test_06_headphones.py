@@ -33,7 +33,8 @@ class HeadphonesTest(TestCase):
 
         bell_file = '/opt/factorytest/res/nocturne.wav'
         cmd = f'aplay -Dhw:1,0 -r 48000 -f S16_LE {bell_file}'
-        self.play_proc = subprocess.Popen(cmd, shell=True)
+        self.play_proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE,
+                                          stderr=subprocess.PIPE)
 
     def _stop_routine(self):
         if self.play_proc.poll() is None:

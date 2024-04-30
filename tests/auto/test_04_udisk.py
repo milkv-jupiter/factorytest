@@ -19,6 +19,7 @@ class UDiskTest(TestCase):
         u3_hub_dir = '/sys/devices/platform/soc/soc:usb3@0/c0a00000.dwc3/xhci-hcd.0.auto/usb3/3-1/'
         self.assertTrue(os.path.exists(f'{u2_hub_dir}/product'))
         self.assertTrue(os.path.exists(f'{u3_hub_dir}/product'))
-        # self.assertTrue(os.path.exists(f'{u3_hub_dir}/3-1.2/product'))
-        # self.assertTrue(os.path.exists(f'{u3_hub_dir}/3-1.3/product'))
+        self.assertTrue(os.path.exists(f'{u2_hub_dir}/2-1.1/product'))
+        self.assertTrue(os.path.exists(f'{u2_hub_dir}/2-1.3/product'))
+        self.assertTrue(os.path.exists(f'{u3_hub_dir}/3-1.2/product'))
         self.assertTrue(os.path.exists(f'{u3_hub_dir}/3-1.4/product'))

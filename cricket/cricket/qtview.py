@@ -3,7 +3,7 @@
 This is the "View" of the MVC world.
 """
 
-from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtCore import Qt, QTimer, QUrl
 from PyQt5.QtGui import QColor
 from PyQt5.QtWidgets import (
     QMainWindow,
@@ -14,10 +14,16 @@ from PyQt5.QtWidgets import (
     QGroupBox,
     QTableWidget,
     QStatusBar,
-    QTableWidgetItem
+    QTableWidgetItem,
+    QHeaderView
 )
+from PyQt5.QtMultimedia import QMediaPlayer, QMediaContent
+from PyQt5.QtMultimediaWidgets import QVideoWidget
 
 import os
+import time
+import threading
+import subprocess
 from importlib import import_module
 
 from cricket.model import TestMethod, TestCase, TestModule
@@ -28,7 +34,7 @@ from cricket.lang import SimpleLang
 # Display constants for test status
 STATUS = {
     TestMethod.STATUS_PASS: {
-        'description': u'Pass',
+        'description': u'通过',
         'symbol': u'\u25cf',
         'tag': 'pass',
         'color': '#28C025',
@@ -40,7 +46,7 @@ STATUS = {
         'color': '#259EBF'
     },
     TestMethod.STATUS_FAIL: {
-        'description': u'Failure',
+        'description': u'失败',
         'symbol': u'F',
         'tag': 'fail',
         'color': '#E32C2E'
@@ -87,6 +93,8 @@ class MainWindow(QMainWindow, SimpleLang):
         self.setWindowTitle(self.get_text('title'))
         # self.showFullScreen()
 
+        self.font_size = 16
+
         # Set up the main content for the window.
         self._setup_main_content()
 
@@ -107,9 +115,12 @@ class MainWindow(QMainWindow, SimpleLang):
         It is a persistent GUI component
         '''
 
+        self.setStyleSheet(f'font-size: {self.font_size}px;')
+
         self.content = QFrame(self)
         self.content_layout = QVBoxLayout(self.content)
 
+        # toolbar
         toolbar = QFrame(self.content)
         layout = QGridLayout(toolbar)
 
@@ -139,19 +150,67 @@ class MainWindow(QMainWindow, SimpleLang):
     
         self.content_layout.addWidget(toolbar)
 
+        # tests
+        # -------------------
+        # |        |        |
+        # | auto   | camera |
+        # |        |        |
+        # -------------------
+        # | manual | audio  |
+        # |        |        |
+        # -------------------
+        self.tests = QFrame(self.content)
+        self.tests_layout = QGridLayout(self.tests)
+
+        self._setup_test_table('auto', 0, 0, 4, 1)
+        self._setup_test_table('manual', 4, 0, 3, 1)
+
+        camera_box = QGroupBox(self.get_text('camera'), self.tests)
+        camera_box_layout = QVBoxLayout(camera_box)
+        video_widget = QVideoWidget(camera_box)
+        self.media_player = QMediaPlayer()
+        self.media_player.setVideoOutput(video_widget)
+        camera_box_layout.addWidget(video_widget)
+
+        audio_box = QGroupBox(self.get_text('audio'), self.tests)
+        audio_box_layout = QVBoxLayout(audio_box)
+
+        self.tests_layout.addWidget(camera_box, 0, 1, 4, 1)
+        self.tests_layout.addWidget(audio_box, 4, 1, 3, 1)
+
+        self.tests_layout.setRowStretch(0, 4)
+        self.tests_layout.setRowStretch(1, 4)
+        self.tests_layout.setRowStretch(2, 4)
+        self.tests_layout.setRowStretch(3, 4)
+
+        self.tests_layout.setRowStretch(4, 3)
+        self.tests_layout.setRowStretch(5, 3)
+        self.tests_layout.setRowStretch(6, 3)
+
+        self.tests_layout.setColumnStretch(0, 1)
+        self.tests_layout.setColumnStretch(1, 1)
+
+        self.content_layout.addWidget(self.tests)
+
+        # set main content to window
         self.setCentralWidget(self.content)
 
-    def _setup_test_table(self, name):
+    def _setup_test_table(self, name, row, column, row_span, column_span):
         module = import_module(name)
 
-        box = QGroupBox(module.MODULE_NAME[self.current_lang], self.content)
+        box = QGroupBox(module.MODULE_NAME[self.current_lang], self.tests)
+        box.setStyleSheet("QGroupBox::title { font-weight: bold; }")
         layout = QVBoxLayout(box)
 
         columns = self.get_text('test_table_head')
 
         table = QTableWidget(box)
+        table.setStyleSheet('QTableWidget { background-color: black; color: white; }')
         table.setColumnCount(len(columns))
         table.setHorizontalHeaderLabels(columns)
+        for i in range(len(columns)):
+            table.horizontalHeader().setSectionResizeMode(i, QHeaderView.Stretch)
+        table.verticalHeader().setStyleSheet('QHeaderView::section { width: 32px; }')
         table.setSelectionBehavior(QTableWidget.SelectRows)
         table.itemSelectionChanged.connect(self.on_testMethodSelected)
         layout.addWidget(table)
@@ -162,7 +221,7 @@ class MainWindow(QMainWindow, SimpleLang):
         layout.addWidget(status)
         self.run_status[name] = status
 
-        self.content_layout.addWidget(box)
+        self.tests_layout.addWidget(box, row, column, row_span, column_span)
 
     ######################################################
     # Handlers for setting a new project
@@ -201,8 +260,14 @@ class MainWindow(QMainWindow, SimpleLang):
                     item = QTableWidgetItem(self._get_text(subModuleName, subModule, testMethod_name))
                     table.setItem(row, 1, item)
                     item = QTableWidgetItem('')
+                    item.setTextAlignment(Qt.AlignCenter)
                     item.setData(Qt.UserRole, testMethod.path)
                     table.setItem(row, 2, item)
+
+                    logical_dpi = table.logicalDpiY()
+                    font_pixel = self.font_size * logical_dpi / 72
+                    row_height = int(font_pixel * 2)
+                    table.setRowHeight(row, row_height)
 
     @project.setter
     def project(self, project):
@@ -215,7 +280,6 @@ class MainWindow(QMainWindow, SimpleLang):
         # Populate the initial tree nodes. This is recursive, because
         # the tree could be of arbitrary depth.
         for testModule_name, testModule in sorted(project.items()):
-            self._setup_test_table(testModule_name)
             self._add_test_module(testModule_name, testModule)
             self.executor[testModule_name] = None
 
@@ -228,18 +292,72 @@ class MainWindow(QMainWindow, SimpleLang):
     ######################################################
 
     def mainloop(self):
+        pipeline = 'gst-pipeline: spacemitsrc location=/opt/factorytest/res/camtest_sensor0_mode0.json close-dmabuf=1 ! videoconvert ! video/x-raw,format=BGRx ! autovideosink sync=0'
+        self.media_player.setMedia(QMediaContent(QUrl(pipeline)))
+        self.media_player.play()
+
+        self.audio_thread = threading.Thread(target=lambda: self.audio_loop())
+        self.audio_thread.start()
+
+        self.cmd_run_all()
+
         self.root.exec_()
+
+    def _play_wav(self, device, volume, path):
+        cmd = f'amixer -c 1 cset numid=1,iface=MIXER,name="DAC Playback Volume" {volume}'
+        proc = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+        print(f'Set playback volume to {volume} return {proc.returncode}')
+
+        cmd = f'aplay -D{device} -r 48000 -f S16_LE {path}'
+        proc = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+        print(f'Play {path} on {device} return {proc.returncode}')
+
+    def _record_wav(self, device, volume, duration, path):
+        cmd = f'amixer -c 1 cset numid=1,iface=MIXER,name="ADC Capture Volume" {volume},{volume}'
+        proc = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+        print(f'Set capture volume to {volume} return {proc.returncode}')
+
+        cmd = f'arecord -D{device} -r 48000 -f S16_LE -d {duration} {path}'
+        proc = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+        print(f'Record {path} on {device} in {duration}s return {proc.returncode}')
+
+    def audio_loop(self):
+        # sleep for a while
+        time.sleep(15)
+
+        device = 'hw:1'
+        playback_volume = 184
+        record_volume = 184
+        duration = 5
+
+        res_path = '/opt/factorytest/res'
+        start_record_file = f'{res_path}/start-record.wav'
+        stop_record_file = f'{res_path}/stop-record.wav'
+        start_play_file = f'{res_path}/start-play.wav'
+        stop_play_file = f'{res_path}/stop-play.wav'
+        record_file = '/tmp/factorytest-record.wav'
+
+        while True:
+            self._play_wav(device, playback_volume, start_record_file)
+            self._record_wav(device, record_volume, duration, record_file)
+            self._play_wav(device, playback_volume, stop_record_file)
+            self._play_wav(device, playback_volume, start_play_file)
+            self._play_wav(device, playback_volume, record_file)
+            self._play_wav(device, playback_volume, stop_play_file)
+            time.sleep(duration)
 
     ######################################################
     # User commands
     ######################################################
         
     def cmd_poweroff(self):
+        self.media_player.stop()
         self.stop()
         # self.root.quit()
         os.system('poweroff')
 
     def cmd_reboot(self):
+        self.media_player.stop()
         self.stop()
         # self.root.quit()
         os.system('reboot')
@@ -298,8 +416,9 @@ class MainWindow(QMainWindow, SimpleLang):
                 if item.data(Qt.UserRole) == node.path:
                     for column in range(columnCount):
                         _item = table.item(row, column)
-                        _item.setForeground(QColor(STATUS[node.status]['color']))
-                    item.setText(STATUS[node.status]['description'])
+                        _item.setBackground(QColor(STATUS[node.status]['color']))
+                    if module == 'auto':
+                        item.setText(STATUS[node.status]['description'])
                     break
 
     def on_testProgress(self, executor):
@@ -386,11 +505,11 @@ class MainWindow(QMainWindow, SimpleLang):
         #     'skip': self.executor.result_count.get(TestMethod.STATUS_SKIP, 0),
         # })
 
-        # Reset the buttons
-        self.reset_button_states_on_end()
-
         # Drop the reference to the executor
         self.executor[module] = None
+
+        # Reset the buttons
+        self.reset_button_states_on_end()
 
     def on_executorSuiteError(self, event, module, error):
         "An error occurred running the test suite."

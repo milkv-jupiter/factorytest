@@ -5,22 +5,24 @@ import threading
 
 from utils.mic import MicTestWindow, GetTestResult
 
-class MicTest(TestCase):
+class MicrophoneTest(TestCase):
     LANGUAGES = {
         'zh': {
-            'MicTest': '麦克风',
+            'MicrophoneTest': '耳麦',
             'test_mic_loop': '录音回放',
-            'title': '麦克风',
-            'test_step': '''1. 点击录音，对着开发板说：测试1、2、3、4、5
-2. 点击停止，判断从喇叭听到的是否刚才对着开发板说的
+            'title': '耳麦',
+            'test_step': '''1. 插入耳机
+2. 点击录音，对着耳麦说：测试1、2、3、4、5
+3. 点击停止，判断从喇叭听到的是否刚才对着开发板说的
 '''
         },
         'en': {
-            'MicTest': 'Mic',
+            'MicrophoneTest': 'Microphone',
             'test_mic_loop': 'Record and playback',
-            'title': 'Mic',
-            'test_step': '''1. 点击录音，对着开发板说：测试1、2、3、4、5
-2. 点击停止，判断从喇叭听到的是否刚才对着开发板说的
+            'title': 'Microphone',
+            'test_step': '''1. 插入耳机
+2. 点击录音，对着耳麦说：测试1、2、3、4、5
+3. 点击停止，判断从喇叭听到的是否刚才对着开发板说的
 '''
         }
     }
@@ -34,7 +36,8 @@ class MicTest(TestCase):
         timeout = 10
         record_file = '/tmp/record.wav'
         cmd = f'arecord -Dhw:1,0 -r 48000 -f S16_LE -d {timeout} {record_file}'
-        self.record_proc = subprocess.Popen(cmd, shell=True)
+        self.record_proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE,
+                                            stderr=subprocess.PIPE)
 
     def _stop_record(self):
         if self.record_proc.poll() is None:
@@ -42,13 +45,14 @@ class MicTest(TestCase):
             self.record_proc.kill()
 
     def _playback_routine(self):
-        volume = 191
+        volume = 160
         cmd = f'amixer -c 1 cset numid=1,iface=MIXER,name="DAC Playback Volume" {volume}'
         result = subprocess.run(cmd, capture_output=True, shell=True)
         print(f'playback amixer: {result.returncode}')
 
         cmd = 'aplay -Dhw:1,0 -r 48000 -f S16_LE /tmp/record.wav'
-        self.playback_proc = subprocess.Popen(cmd, shell=True)
+        self.playback_proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE,
+                                              stderr=subprocess.PIPE)
 
     def _stop_playback(self):
         if self.playback_proc.poll() is None:

@@ -93,7 +93,7 @@ class MainWindow(QMainWindow, SimpleLang):
         self.setWindowTitle(self.get_text('title'))
         # self.showFullScreen()
 
-        self.font_size = 16
+        self.font_size = 14
 
         # Set up the main content for the window.
         self._setup_main_content()
@@ -405,6 +405,16 @@ class MainWindow(QMainWindow, SimpleLang):
         # update "run selected" button enabled state
         self.set_selected_button_state()
 
+    def _get_eMMC_size(self):
+        with open('/sys/block/mmcblk2/size', 'r') as f:
+            return round(int(f.readline().strip()) / 1024 / 1024 / 2, 1)
+        
+    def _get_DDR_size(self):
+        with open('/proc/meminfo', 'r') as f:
+            for line in f.readlines():
+                if line.startswith('MemTotal:'):
+                    return round(int(line.split()[1]) / 1024 / 1024, 0)
+
     def on_nodeStatusUpdate(self, node):
         "Event handler: a node on the tree has received a status update"
         module = node.path.split('.')[0]
@@ -418,7 +428,13 @@ class MainWindow(QMainWindow, SimpleLang):
                         _item = table.item(row, column)
                         _item.setBackground(QColor(STATUS[node.status]['color']))
                     if module == 'auto':
-                        item.setText(STATUS[node.status]['description'])
+                        if node.path == 'auto.test_05_emmc.eMMCTest.test_identify' and node.status == TestMethod.STATUS_PASS:
+                            item.setText(STATUS[node.status]['description'] + f' ({self._get_eMMC_size()}G)')
+                        else:
+                            item.setText(STATUS[node.status]['description'])
+                    elif module == 'manual':
+                        if node.path == 'manual.test_01_ddr.DDRTest.test_capacity' and node.status == TestMethod.STATUS_PASS:
+                            item.setText(f'{self._get_DDR_size()}G')
                     break
 
     def on_testProgress(self, executor):

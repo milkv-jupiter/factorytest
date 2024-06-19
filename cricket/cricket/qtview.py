@@ -10,6 +10,7 @@ from PyQt5.QtWidgets import (
     QFrame,
     QVBoxLayout,
     QGridLayout,
+    QLabel,
     QPushButton,
     QGroupBox,
     QTableWidget,
@@ -119,6 +120,33 @@ class MainWindow(QMainWindow, SimpleLang):
 
         self.content = QFrame(self)
         self.content_layout = QVBoxLayout(self.content)
+
+        # Information
+        info = QFrame(self.content)
+        info_layout = QGridLayout(info)
+
+        cpu_model = QLabel(f'{self.get_text("cpu_model")}: {self._get_CPU_model()}', info)
+        info_layout.addWidget(cpu_model, 0, 0)
+
+        cpu_freq = QLabel(f'{self.get_text("cpu_freq")}: {self._get_CPU_freq()} GHz', info)
+        info_layout.addWidget(cpu_freq, 0, 1)
+
+        ddr_size = QLabel(f'{self.get_text("ddr_size")}: {self._get_DDR_size()} GB', info)
+        info_layout.addWidget(ddr_size, 0, 2)
+
+        emmc_size = QLabel(f'{self.get_text("emmc_size")}: {self._get_eMMC_size()} GB', info)
+        info_layout.addWidget(emmc_size, 0, 3)
+
+        ssd_size = QLabel(f'{self.get_text("ssd_size")}: {self._get_SSD_size()} GB', info)
+        info_layout.addWidget(ssd_size, 0, 4)
+
+        product_name = QLabel(f'{self.get_text("product_name")}: {self._get_product_name()}', info)
+        info_layout.addWidget(product_name, 0, 5)
+
+        fw_version = QLabel(f'{self.get_text("fw_version")}: {self._get_fw_version()}', info)
+        info_layout.addWidget(fw_version, 0, 6)
+
+        self.content_layout.addWidget(info)
 
         # toolbar
         toolbar = QFrame(self.content)
@@ -405,15 +433,45 @@ class MainWindow(QMainWindow, SimpleLang):
         # update "run selected" button enabled state
         self.set_selected_button_state()
 
+    def _get_fw_version(self):
+        path = '/etc/bianbu_version'
+        if os.path.exists(path):
+            with open(path, 'r') as f:
+                return f.readline().strip()
+
+    def _get_product_name(self):
+        path = '/proc/device-tree/model'
+        if os.path.exists(path):
+            with open(path, 'r') as f:
+                return f.readline().replace('spacemit', '').replace('board', '').strip()
+
+    def _get_SSD_size(self):
+        path = '/sys/class/nvme/nvme0/nvme0n1/size'
+        if os.path.exists(path):
+            with open(path, 'r') as f:
+                return round(int(f.readline().strip()) / 1000 / 1000 / 2, 0)
+
     def _get_eMMC_size(self):
-        with open('/sys/block/mmcblk2/size', 'r') as f:
-            return round(int(f.readline().strip()) / 1024 / 1024 / 2, 1)
+        path = '/sys/block/mmcblk2/size'
+        if os.path.exists(path):
+            with open(path, 'r') as f:
+                return round(int(f.readline().strip()) / 1000 / 1000 / 2, 1)
         
     def _get_DDR_size(self):
         with open('/proc/meminfo', 'r') as f:
             for line in f.readlines():
                 if line.startswith('MemTotal:'):
                     return round(int(line.split()[1]) / 1024 / 1024, 0)
+                
+    def _get_CPU_model(self):
+        with open('/proc/cpuinfo', 'r') as f:
+            for line in f.readlines():
+                if line.startswith('model name'):
+                    return line.split(':')[1].strip()
+                
+    def _get_CPU_freq(self):
+        with open('/sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq', 'r') as f:
+            return round(int(f.readline().strip()) / 1000 / 1000, 1)
 
     def on_nodeStatusUpdate(self, node):
         "Event handler: a node on the tree has received a status update"
@@ -424,17 +482,16 @@ class MainWindow(QMainWindow, SimpleLang):
             item = table.item(row, columnCount-1)
             if item is not None:
                 if item.data(Qt.UserRole) == node.path:
+                    if module == 'manual' and node.status == TestMethod.STATUS_PASS:
+                        item.setText('人工判断')
+                        break
+
                     for column in range(columnCount):
                         _item = table.item(row, column)
                         _item.setBackground(QColor(STATUS[node.status]['color']))
-                    if module == 'auto':
-                        if node.path == 'auto.test_05_emmc.eMMCTest.test_identify' and node.status == TestMethod.STATUS_PASS:
-                            item.setText(STATUS[node.status]['description'] + f' ({self._get_eMMC_size()}G)')
-                        else:
-                            item.setText(STATUS[node.status]['description'])
-                    elif module == 'manual':
-                        if node.path == 'manual.test_01_ddr.DDRTest.test_capacity' and node.status == TestMethod.STATUS_PASS:
-                            item.setText(f'{self._get_DDR_size()}G')
+
+                    item.setText(STATUS[node.status]['description'])
+
                     break
 
     def on_testProgress(self, executor):

@@ -5,4 +5,6 @@ ROOT=$(dirname "$(readlink -f "$0")")
 pushd $ROOT > /dev/null
 ./stress-ng.sh &
 ./memtester.sh &
+./gpu.sh &
+./vpu.sh &
 popd > /dev/null

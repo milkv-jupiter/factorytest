@@ -4,22 +4,27 @@ This is the "View" of the MVC world.
 """
 
 from PyQt5.QtCore import Qt, QTimer, QUrl
-from PyQt5.QtGui import QColor
+from PyQt5.QtGui import QColor, QPixmap, QImage
 from PyQt5.QtWidgets import (
     QMainWindow,
     QFrame,
+    QHBoxLayout,
     QVBoxLayout,
     QGridLayout,
     QLabel,
     QPushButton,
     QGroupBox,
     QTableWidget,
+    QAbstractItemView,
     QStatusBar,
     QTableWidgetItem,
     QHeaderView
 )
 from PyQt5.QtMultimedia import QMediaPlayer, QMediaContent
 from PyQt5.QtMultimediaWidgets import QVideoWidget
+
+import qrcode
+from PIL.ImageQt import ImageQt
 
 import os
 import time
@@ -184,7 +189,7 @@ class MainWindow(QMainWindow, SimpleLang):
         # | auto   | camera |
         # |        |        |
         # -------------------
-        # | manual | audio  |
+        # | manual | others |
         # |        |        |
         # -------------------
         self.tests = QFrame(self.content)
@@ -200,11 +205,21 @@ class MainWindow(QMainWindow, SimpleLang):
         self.media_player.setVideoOutput(video_widget)
         camera_box_layout.addWidget(video_widget)
 
-        audio_box = QGroupBox(self.get_text('audio'), self.tests)
-        audio_box_layout = QVBoxLayout(audio_box)
+        # others
+        self.others_box = QGroupBox(self.get_text('others'), self.tests)
+        others_box_layout = QVBoxLayout(self.others_box)
+
+        # item
+        self.others_item = QFrame(self.others_box)
+        self.others_item_layout = QHBoxLayout(self.others_item)
+        others_box_layout.addWidget(self.others_item)
+
+        sn = self._get_sn()
+        if sn:
+            self._setup_sn_qrcode(sn)
 
         self.tests_layout.addWidget(camera_box, 0, 1, 4, 1)
-        self.tests_layout.addWidget(audio_box, 4, 1, 3, 1)
+        self.tests_layout.addWidget(self.others_box, 4, 1, 3, 1)
 
         self.tests_layout.setRowStretch(0, 4)
         self.tests_layout.setRowStretch(1, 4)
@@ -234,6 +249,7 @@ class MainWindow(QMainWindow, SimpleLang):
 
         table = QTableWidget(box)
         table.setStyleSheet('QTableWidget { background-color: black; color: white; }')
+        table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         table.setColumnCount(len(columns))
         table.setHorizontalHeaderLabels(columns)
         for i in range(len(columns)):
@@ -250,6 +266,35 @@ class MainWindow(QMainWindow, SimpleLang):
         self.run_status[name] = status
 
         self.tests_layout.addWidget(box, row, column, row_span, column_span)
+
+    def _create_qrcode(self, data):
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_L,
+            box_size=8,
+            border=0,
+        )
+        qr.add_data(data)
+        qr.make(fit=True)
+
+        img = qr.make_image(fill='black', back_color='white')
+        qt_image = ImageQt(img).convertToFormat(QImage.Format_RGB32)
+        return QPixmap.fromImage(qt_image)
+
+    def _setup_sn_qrcode(self, sn):
+        sn_qrcode = QFrame(self.others_item)
+        sn_qrcode_layout = QVBoxLayout(sn_qrcode)
+
+        qr_label = QLabel(sn_qrcode)
+        qr_label.setAlignment(Qt.AlignCenter)
+        qr_label.setPixmap(self._create_qrcode(sn))
+        sn_qrcode_layout.addWidget(qr_label)
+
+        sn_label = QLabel(f'{self.get_text("sn")}: {sn}', sn_qrcode)
+        sn_qrcode_layout.addWidget(sn_label)
+
+        self.others_item_layout.addWidget(sn_qrcode)
+
 
     ######################################################
     # Handlers for setting a new project
@@ -432,6 +477,12 @@ class MainWindow(QMainWindow, SimpleLang):
         "Event handler: a test case has been selected in the tree"
         # update "run selected" button enabled state
         self.set_selected_button_state()
+
+    def _get_sn(self):
+        path = '/proc/device-tree/serial-number'
+        if os.path.exists(path):
+            with open(path, 'r') as f:
+                return f.readline().strip()
 
     def _get_fw_version(self):
         path = '/etc/bianbu_version'

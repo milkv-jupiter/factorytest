@@ -4,7 +4,7 @@ This is the "View" of the MVC world.
 """
 
 from PyQt5.QtCore import Qt, QTimer, QUrl
-from PyQt5.QtGui import QColor, QPixmap, QImage
+from PyQt5.QtGui import QColor, QPixmap, QImage, QPalette
 from PyQt5.QtWidgets import (
     QMainWindow,
     QFrame,
@@ -12,13 +12,18 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
     QGridLayout,
     QLabel,
+    QCheckBox,
+    QComboBox,
+    QProgressBar,
+    QProgressDialog,
     QPushButton,
     QGroupBox,
     QTableWidget,
     QAbstractItemView,
     QStatusBar,
     QTableWidgetItem,
-    QHeaderView
+    QHeaderView,
+    QSlider
 )
 from PyQt5.QtMultimedia import QMediaPlayer, QMediaContent
 from PyQt5.QtMultimediaWidgets import QVideoWidget
@@ -36,6 +41,8 @@ from cricket.model import TestMethod, TestCase, TestModule
 from cricket.executor import Executor
 from cricket.lang import SimpleLang
 
+PASS_COLOR = '#28C025'
+FAIL_COLOR = '#E32C2E'
 
 # Display constants for test status
 STATUS = {
@@ -94,6 +101,12 @@ class MainWindow(QMainWindow, SimpleLang):
         self.test_list = {}
         self.run_status = {}
         self.executor = {}
+        
+        self.usb_list = []
+        
+        self.set_brightness()
+        
+        self.wifi_mac_Ok = False
 
         self.root = root
         self.setWindowTitle(self.get_text('title'))
@@ -114,7 +127,7 @@ class MainWindow(QMainWindow, SimpleLang):
     ######################################################
     # Internal GUI layout methods.
     ######################################################
-        
+    
     def _setup_main_content(self):
         '''
         The button toolbar runs as a horizontal area at the top of the GUI.
@@ -127,31 +140,7 @@ class MainWindow(QMainWindow, SimpleLang):
         self.content_layout = QVBoxLayout(self.content)
 
         # Information
-        info = QFrame(self.content)
-        info_layout = QGridLayout(info)
-
-        cpu_model = QLabel(f'{self.get_text("cpu_model")}: {self._get_CPU_model()}', info)
-        info_layout.addWidget(cpu_model, 0, 0)
-
-        cpu_freq = QLabel(f'{self.get_text("cpu_freq")}: {self._get_CPU_freq()} GHz', info)
-        info_layout.addWidget(cpu_freq, 0, 1)
-
-        ddr_size = QLabel(f'{self.get_text("ddr_size")}: {self._get_DDR_size()} GB', info)
-        info_layout.addWidget(ddr_size, 0, 2)
-
-        emmc_size = QLabel(f'{self.get_text("emmc_size")}: {self._get_eMMC_size()} GB', info)
-        info_layout.addWidget(emmc_size, 0, 3)
-
-        ssd_size = QLabel(f'{self.get_text("ssd_size")}: {self._get_SSD_size()} GB', info)
-        info_layout.addWidget(ssd_size, 0, 4)
-
-        product_name = QLabel(f'{self.get_text("product_name")}: {self._get_product_name()}', info)
-        info_layout.addWidget(product_name, 0, 5)
-
-        fw_version = QLabel(f'{self.get_text("fw_version")}: {self._get_fw_version()}', info)
-        info_layout.addWidget(fw_version, 0, 6)
-
-        self.content_layout.addWidget(info)
+        self._setup_info()
 
         # toolbar
         toolbar = QFrame(self.content)
@@ -195,8 +184,9 @@ class MainWindow(QMainWindow, SimpleLang):
         self.tests = QFrame(self.content)
         self.tests_layout = QGridLayout(self.tests)
 
-        self._setup_test_table('auto', 0, 0, 4, 1)
-        self._setup_test_table('manual', 4, 0, 3, 1)
+        self._setup_test_table('auto', 0, 0, 5, 1)
+        self._setup_usb_frame(5, 0, 1, 1)
+        self._setup_test_table('manual', 6, 0, 4, 1)
 
         camera_box = QGroupBox(self.get_text('camera'), self.tests)
         camera_box_layout = QVBoxLayout(camera_box)
@@ -206,29 +196,22 @@ class MainWindow(QMainWindow, SimpleLang):
         camera_box_layout.addWidget(video_widget)
 
         # others
-        self.others_box = QGroupBox(self.get_text('others'), self.tests)
-        others_box_layout = QVBoxLayout(self.others_box)
+        self._setup_others()
 
-        # item
-        self.others_item = QFrame(self.others_box)
-        self.others_item_layout = QHBoxLayout(self.others_item)
-        others_box_layout.addWidget(self.others_item)
+        self.tests_layout.addWidget(camera_box, 0, 1, 6, 1)
+        self.tests_layout.addWidget(self.others_box, 6, 1, 4, 1)
 
-        sn = self._get_sn()
-        if sn:
-            self._setup_sn_qrcode(sn)
+        self.tests_layout.setRowStretch(0, 6)
+        self.tests_layout.setRowStretch(1, 6)
+        self.tests_layout.setRowStretch(2, 6)
+        self.tests_layout.setRowStretch(3, 6)
+        self.tests_layout.setRowStretch(4, 6)
+        self.tests_layout.setRowStretch(5, 6)
 
-        self.tests_layout.addWidget(camera_box, 0, 1, 4, 1)
-        self.tests_layout.addWidget(self.others_box, 4, 1, 3, 1)
-
-        self.tests_layout.setRowStretch(0, 4)
-        self.tests_layout.setRowStretch(1, 4)
-        self.tests_layout.setRowStretch(2, 4)
-        self.tests_layout.setRowStretch(3, 4)
-
-        self.tests_layout.setRowStretch(4, 3)
-        self.tests_layout.setRowStretch(5, 3)
-        self.tests_layout.setRowStretch(6, 3)
+        self.tests_layout.setRowStretch(6, 4)
+        self.tests_layout.setRowStretch(7, 4)
+        self.tests_layout.setRowStretch(8, 4)
+        self.tests_layout.setRowStretch(9, 4)
 
         self.tests_layout.setColumnStretch(0, 1)
         self.tests_layout.setColumnStretch(1, 1)
@@ -237,6 +220,42 @@ class MainWindow(QMainWindow, SimpleLang):
 
         # set main content to window
         self.setCentralWidget(self.content)
+        
+    def _setup_info(self):
+        info = QFrame(self.content)
+        info_layout = QGridLayout(info)
+
+        cpu_model = QLabel(f'{self.get_text("cpu_model")}: {self._get_CPU_model()}', info)
+        info_layout.addWidget(cpu_model, 0, 0)
+
+        cpu_freq = QLabel(f'{self.get_text("cpu_freq")}: {self._get_CPU_freq()} GHz', info)
+        info_layout.addWidget(cpu_freq, 0, 1)
+        
+        self.cpu_temp = QLabel(f'{self.get_text("cpu_temp")}: {self._get_CPU_Temp()} °C', info)
+        self._cpu_temp_timer = QTimer(self)
+        self._cpu_temp_timer.timeout.connect(self.on_cpuTempUpdate)
+        self._cpu_temp_timer.start(1000)  
+        info_layout.addWidget(self.cpu_temp, 0, 2)
+
+        ddr_size = QLabel(f'{self.get_text("ddr_size")}: {self._get_DDR_size()} GB', info)
+        info_layout.addWidget(ddr_size, 0, 3)
+
+        emmc_size = QLabel(f'{self.get_text("emmc_size")}: {self._get_eMMC_size()} GB', info)
+        info_layout.addWidget(emmc_size, 0, 4)
+
+        ssd_size = QLabel(f'{self.get_text("ssd_size")}: {self._get_SSD_size()} GB', info)
+        info_layout.addWidget(ssd_size, 0, 5)
+        
+        self.hdmi_model = QLabel(f'{self.get_text("hdmi_model")}: None', info)
+        info_layout.addWidget(self.hdmi_model, 0, 6)
+
+        product_name = QLabel(f'{self.get_text("product_name")}: {self._get_product_name()}', info)
+        info_layout.addWidget(product_name, 0, 7)
+
+        fw_version = QLabel(f'{self.get_text("fw_version")}: {self._get_fw_version()}', info)
+        info_layout.addWidget(fw_version, 0, 8)
+
+        self.content_layout.addWidget(info)
 
     def _setup_test_table(self, name, row, column, row_span, column_span):
         module = import_module(name)
@@ -267,6 +286,185 @@ class MainWindow(QMainWindow, SimpleLang):
 
         self.tests_layout.addWidget(box, row, column, row_span, column_span)
 
+    def _setup_others(self):
+        self.others_box = QGroupBox(self.get_text('others'), self.tests)
+        self.others_box_layout = QVBoxLayout(self.others_box)
+
+        # Comment the code below if you don't need it
+
+        # item
+        self._setup_others_item()
+        
+        # status
+        self._setup_others_status()
+
+    def _setup_others_item(self):
+        self.others_item = QFrame(self.others_box)
+        self.others_item_layout = QHBoxLayout(self.others_item)
+        self.others_box_layout.addWidget(self.others_item)
+
+        self._setup_others_test()
+        
+        self._setup_wifi_mac()
+
+        sn = self._get_sn()
+        if sn:
+            self._setup_sn_qrcode(sn)
+
+    def _setup_others_test(self):
+        others_test = QFrame(self.others_item)
+        others_test_layout = QVBoxLayout(others_test)
+
+        # lcd
+        lcd_frame = QFrame(others_test)
+        lcd_frame.setAutoFillBackground(True)
+        lcd_frame.setPalette(QPalette(QColor('darkgray')))
+        lcd_layout = QHBoxLayout(lcd_frame)
+        
+        # lcd_button = QPushButton(self.get_text('lcd'), lcd_frame)
+        # lcd_button.clicked.connect(self.cmd_lcd)
+        # lcd_layout.addWidget(lcd_button)
+
+        # lcd backlight
+        backlight_label = QLabel(self.get_text('lcd_backlight')+" :", lcd_frame)
+        backlight_label.setAlignment( Qt.AlignVCenter)
+        lcd_layout.addWidget(backlight_label)
+        
+        # Create a slider
+        lcd_slider = QSlider(Qt.Horizontal, lcd_frame)
+        lcd_slider.setRange(0, 255)  
+        lcd_slider.setValue(128) 
+        lcd_slider.valueChanged.connect(self.set_brightness)
+        lcd_layout.addWidget(lcd_slider)
+        
+        label_brightness = QLabel("128", lcd_frame)
+        label_brightness.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        label_brightness.setFixedWidth(24)
+        lcd_slider.valueChanged.connect(lambda value: label_brightness.setText(str(value)))
+        lcd_layout.addWidget(label_brightness)
+        
+        others_test_layout.addWidget(lcd_frame)
+
+        # aging test
+        aging_test = QFrame(others_test)
+        aging_test.setAutoFillBackground(True)
+        aging_test.setPalette(QPalette(QColor('darkgray')))
+        aging_test_layout = QVBoxLayout(aging_test)
+
+        self.aging_button = QPushButton(self.get_text('aging_test'), aging_test)
+        self.aging_button.setAutoFillBackground(True)
+        self.aging_button.clicked.connect(self.cmd_aging)
+        aging_test_layout.addWidget(self.aging_button)
+
+        aging_item = QFrame(aging_test)
+        aging_item_layout = QHBoxLayout(aging_item)
+        self.cpu_aging = QCheckBox('CPU', aging_item)
+        self.cpu_aging.setChecked(True)
+        aging_item_layout.addWidget(self.cpu_aging)
+        self.ddr_aging = QCheckBox('DDR', aging_item)
+        self.ddr_aging.setChecked(True)
+        aging_item_layout.addWidget(self.ddr_aging)
+        self.gpu_aging = QCheckBox('GPU', aging_item)
+        self.gpu_aging.setChecked(True)
+        aging_item_layout.addWidget(self.gpu_aging)
+        self.vpu_aging = QCheckBox('VPU', aging_item)
+        self.vpu_aging.setChecked(True)
+        aging_item_layout.addWidget(self.vpu_aging)
+        aging_test_layout.addWidget(aging_item)
+
+        aging_duration = QFrame(aging_test)
+        aging_duration_layout = QHBoxLayout(aging_duration)
+        aging_duration_label = QLabel(f'{self.get_text("aging_duration")}: ', aging_duration)
+        aging_duration_layout.addWidget(aging_duration_label)
+        self.aging_duration_choice = QComboBox(aging_test)
+        self.aging_duration_choice.addItems(['4', '8', '12', '24'])
+        self.aging_duration_choice.setCurrentText('8')
+        aging_duration_layout.addWidget(self.aging_duration_choice)
+        aging_test_layout.addWidget(aging_duration)
+
+        others_test_layout.addWidget(aging_test)
+        
+        self.others_item_layout.addWidget(others_test)
+    
+    def _setup_wifi_mac(self):
+        mac = self._get_wifi_mac()
+        if mac:
+            self._setup_wifi_mac_qrcode(mac)
+        else:
+            QTimer.singleShot(2000, self._setup_wifi_mac)
+    
+    # wifi signal part   
+    def _setup_others_status(self):
+        self.others_status = QFrame(self.others_box)
+        self.others_status_layout = QHBoxLayout(self.others_status)
+        self.others_box_layout.addWidget(self.others_status)
+        self._setup_wifi_view()
+
+    def _setup_wifi_view(self):
+        wifi = QFrame(self.others_status)
+        wifi_layout = QGridLayout(wifi)
+
+        self.others_status_layout.addWidget(wifi)
+
+        wifi_label = QLabel(f'{self.get_text("wifi")}: ', wifi)
+        wifi_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        wifi_layout.addWidget(wifi_label, 0, 0)
+
+        self.wifi_signal_level = QProgressBar(wifi)
+        self.wifi_signal_level.setAlignment(Qt.AlignLeft)
+        self.wifi_signal_level.setMaximum(5)
+        wifi_layout.addWidget(self.wifi_signal_level, 0, 1)
+
+        QTimer.singleShot(3000, lambda: self.on_wifiStatusUpdate())
+        
+    # [start] Check the usb to see if the device is inserted
+    def usb_loop(self, label, usb_path):
+        while True:
+            if os.path.exists(usb_path):
+                label.setPalette(QPalette(QColor(PASS_COLOR)))
+            else:
+                label.setPalette(QPalette(QColor(255, 255,255)))
+
+            time.sleep(1)
+
+    def _add_usb_test(self, text: str, row: int, column: int, path: str):
+        label = QLabel(text, self.usb_frame)
+        label.setAutoFillBackground(True)
+        label.setPalette(QPalette(QColor('white')))
+        label.setAlignment(Qt.AlignCenter)
+        self.usb_frame_layout.addWidget(label, row, column)
+        self.usb_list.append(label)
+
+        thread = threading.Thread(target=self.usb_loop, args=(label, path))
+        thread.start()
+
+    def _setup_usb_frame(self, row, column, row_span, column_span):
+        self.usb_frame = QFrame(self.tests)
+        self.usb_frame_layout = QGridLayout(self.usb_frame)
+        
+        self._add_usb_test('USB A口 (左上) 2.0', 0, 0,
+                           '/sys/bus/usb/devices/usb2/2-1/2-1.1/product')
+        self._add_usb_test('USB A口 (左上) 3.0', 1, 0,
+                           '/sys/bus/usb/devices/usb3/3-1/3-1.1/product')
+        
+        self._add_usb_test('USB A口 (左下) 2.0', 0, 1,
+                           '/sys/bus/usb/devices/usb2/2-1/2-1.4/product')
+        self._add_usb_test('USB A口 (左下) 3.0', 1, 1,
+                           '/sys/bus/usb/devices/usb3/3-1/3-1.4/product')
+        
+        self._add_usb_test('USB A口 (右上) 2.0', 0, 2,
+                           '/sys/bus/usb/devices/usb2/2-1/2-1.3/product')
+        self._add_usb_test('USB A口 (右上) 3.0', 1, 2,
+                           '/sys/bus/usb/devices/usb3/3-1/3-1.3/product')
+
+        self._add_usb_test('USB A口 (右下) 2.0', 0, 3,
+                           '/sys/bus/usb/devices/usb2/2-1/2-1.2/product')
+        self._add_usb_test('USB A口 (右下) 3.0', 1, 3,
+                           '/sys/bus/usb/devices/usb3/3-1/3-1.2/product')
+    
+        self.tests_layout.addWidget(self.usb_frame, row, column, row_span, column_span)
+    # [end] Check the usb to see if the device is inserted
+
     def _create_qrcode(self, data):
         qr = qrcode.QRCode(
             version=1,
@@ -291,11 +489,25 @@ class MainWindow(QMainWindow, SimpleLang):
         sn_qrcode_layout.addWidget(qr_label)
 
         sn_label = QLabel(f'{self.get_text("sn")}: {sn}', sn_qrcode)
+        sn_label.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
         sn_qrcode_layout.addWidget(sn_label)
 
         self.others_item_layout.addWidget(sn_qrcode)
 
+    def _setup_wifi_mac_qrcode(self, mac):
+        mac_qrcode = QFrame(self.others_item)
+        mac_qrcode_layout = QVBoxLayout(mac_qrcode)
 
+        qr_label = QLabel(mac_qrcode)
+        qr_label.setAlignment(Qt.AlignCenter)
+        qr_label.setPixmap(self._create_qrcode(mac))
+        mac_qrcode_layout.addWidget(qr_label)
+
+        mac_label = QLabel(f'{self.get_text("wifi_mac")}: {mac}', mac_qrcode)
+        mac_label.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
+        mac_qrcode_layout.addWidget(mac_label)
+
+        self.others_item_layout.addWidget(mac_qrcode)
     ######################################################
     # Handlers for setting a new project
     ######################################################
@@ -368,6 +580,9 @@ class MainWindow(QMainWindow, SimpleLang):
         pipeline = 'gst-pipeline: spacemitsrc location=/opt/factorytest/res/camtest_sensor0_mode0.json close-dmabuf=1 ! videoconvert ! video/x-raw,format=BGRx ! autovideosink sync=0'
         self.media_player.setMedia(QMediaContent(QUrl(pipeline)))
         self.media_player.play()
+        
+        self.hdmi_thread = threading.Thread(target=self.hdmi_loop)
+        self.hdmi_thread.start()
 
         self.audio_thread = threading.Thread(target=lambda: self.audio_loop())
         self.audio_thread.start()
@@ -375,6 +590,28 @@ class MainWindow(QMainWindow, SimpleLang):
         self.cmd_run_all()
 
         self.root.exec_()
+        
+    def hdmi_loop(self):
+        card = '/sys/class/drm/card2-HDMI-A-1'
+        if os.path.exists(card):
+            while True:
+                with open(f'{card}/status', 'r') as f:
+                    status = f.readline().strip()
+                    if status == 'connected':
+                        break
+
+                time.sleep(1)
+
+            cmd = f'cat {card}/edid | edid-decode'
+            edid_proc = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+            for line in edid_proc.stdout.splitlines():
+                if line.strip().startswith('Manufacturer'):
+                    manufacturer = line.strip().split(':')[1].strip()
+
+                if line.strip().startswith('Model'):
+                    model = line.strip().split(':')[1].strip()
+
+            self.hdmi_model.setText(f'{self.get_text("hdmi_model")}: {manufacturer} {model}')
 
     def _play_wav(self, device, volume, path):
         cmd = f'amixer -c 1 cset numid=1,iface=MIXER,name="DAC Playback Volume" {volume}'
@@ -419,10 +656,35 @@ class MainWindow(QMainWindow, SimpleLang):
             self._play_wav(device, playback_volume, stop_play_file)
             time.sleep(duration)
 
+    # lcd part
+    # def update_lcd_color(self):
+    #     color = self.lcd_color_list[self.lcd_color_index % len(self.lcd_color_list)]
+    #     self.lcd_color_index += 1
+    #     self.setPalette(QPalette(QColor(color)))
+        
+    def set_brightness(self, brightness = 128):
+        path = '/sys/devices/platform/soc/soc:lcd_backlight/backlight/soc:lcd_backlight/brightness'
+        try:
+            with open(path, 'w') as f:
+                f.write(f'{brightness}')
+        except:
+            pass
+    
+    # def keyPressEvent(self, event):
+    #     super().keyPressEvent(event)
+
+    # def mousePressEvent(self, event):
+    #     super().mousePressEvent(event)
+        
     ######################################################
     # User commands
     ######################################################
-        
+    # def cmd_lcd(self):
+    #     self.on_lcdTest = True
+    #     self.content.setVisible(False)
+    #     self.lcd_color_index = 0
+    #     self.update_lcd_color()
+    
     def cmd_poweroff(self):
         self.media_player.stop()
         self.stop()
@@ -469,6 +731,168 @@ class MainWindow(QMainWindow, SimpleLang):
                            not self.executor[module].is_running):
                 self.run(module, labels=labels)
 
+    # aging part
+    def _convert_seconds(self, seconds):
+        hours = seconds // 3600
+        minutes = (seconds % 3600) // 60
+        remaining_seconds = seconds % 60
+
+        return hours, minutes, remaining_seconds
+    
+    def update_aging_hints(self, error: str = None):
+        hours, minutes, seconds = self._convert_seconds(self.aging_elapse)
+        hints = '正在进行老化测试...\n'
+        hints += f'计划老化 {self.aging_duration_choice.currentText()} 小时\n'
+        hints += f'已老化 {hours} 小时 {minutes} 分 {seconds} 秒\n'
+        if error:
+            hints += error
+        self.aging_dialog.setLabelText(hints)
+        
+    def start_aging_test(self):
+        self.cpu_aging_proc = None
+        self.ddr_aging_proc = None
+        self.gpu_aging_proc = None
+        self.vpu_aging_proc = None
+
+        if self.cpu_aging.isChecked():
+            print('start cpu aging test')
+            cmd = 'stress-ng --cpu 4 --cpu-method all --cpu-load 50 --metrics-brief'
+            self.cpu_aging_proc = subprocess.Popen(cmd, shell=True,
+                                                   start_new_session= True,
+                                                   stdout=subprocess.PIPE,
+                                                   stderr=subprocess.PIPE)
+
+        if self.ddr_aging.isChecked():
+            print('start ddr aging test')
+            cmd = '/opt/factorytest/utils/memtester.sh'
+            self.ddr_aging_proc = subprocess.Popen(cmd, shell=True,
+                                                   start_new_session= True,
+                                                   stdout=subprocess.PIPE,
+                                                   stderr=subprocess.PIPE)
+
+        if self.gpu_aging.isChecked():
+            print('start gpu aging test')
+            cmd = 'glmark2-es2-wayland --off-screen --run-forever > /tmp/glmark2.log'
+            self.gpu_aging_proc = subprocess.Popen(cmd, shell=True,
+                                                   start_new_session= True,
+                                                   stdout=subprocess.PIPE,
+                                                   stderr=subprocess.PIPE)
+
+        if self.vpu_aging.isChecked():
+            print('start vpu aging tesht')
+            cmd = '/opt/factorytest/utils/vpu.sh'
+            self.vpu_aging_proc = subprocess.Popen(cmd, shell=True,
+                                                   start_new_session= True,
+                                                   stdout=subprocess.PIPE,
+                                                   stderr=subprocess.PIPE)
+
+    def on_agingTestUpdate(self):
+        self.aging_elapse += 1
+        self.aging_dialog.setValue(self.aging_elapse)
+
+        error_modules = []
+        if self.cpu_aging.isChecked():
+            if self.cpu_aging_proc and self.cpu_aging_proc.poll():
+                if self.cpu_aging_proc.returncode != 0:
+                    print('cpu aging test fail')
+                    error_modules.append('CPU')
+                self.cpu_aging_proc = None
+
+        if self.ddr_aging.isChecked():
+            if self.ddr_aging_proc and self.ddr_aging_proc.poll():
+                if self.ddr_aging_proc.returncode != 0:
+                    print('ddr aging test fail')
+                    error_modules.append('DDR')
+                self.ddr_aging_proc = None
+
+        if self.gpu_aging.isChecked():
+            if self.gpu_aging_proc and self.gpu_aging_proc.poll():
+                if self.gpu_aging_proc.returncode != 0:
+                    print('gpu aging test fail')
+                    error_modules.append('GPU')
+                self.gpu_aging_proc = None
+
+        if self.vpu_aging.isChecked():
+            if self.vpu_aging_proc and self.vpu_aging_proc.poll():
+                if self.vpu_aging_proc.returncode != 0:
+                    print('vpu aging test fail')
+                    error_modules.append('VPU')
+                self.vpu_aging_proc = None
+
+        if error_modules:
+            error = ', '.join(error_modules) + '老化测试异常'
+            self.aging_pass = False
+            self.aging_timer.stop()
+        else:
+            error = '一切正常'
+
+        self.update_aging_hints(error)
+
+        if self.aging_elapse >= self.aging_duration and not error_modules:
+            self.aging_dialog.close()
+
+    def stop_aging_test(self):
+        if self.cpu_aging.isChecked():
+            print('stop cpu aging test')
+            if self.cpu_aging_proc and not self.cpu_aging_proc.poll():
+                self.cpu_aging_proc.kill()
+                self.cpu_aging_proc.wait()
+            self.cpu_aging_proc = None
+
+        if self.ddr_aging.isChecked():
+            print('stop ddr aging test')
+            if self.ddr_aging_proc and not self.ddr_aging_proc.poll():
+                self.ddr_aging_proc.kill()
+                self.ddr_aging_proc.wait()
+            self.ddr_aging_proc = None
+
+        if self.gpu_aging.isChecked():
+            print('stop gpu aging test')
+            if self.gpu_aging_proc and not self.gpu_aging_proc.poll():
+                self.gpu_aging_proc.kill()
+                self.gpu_aging_proc.wait()
+            self.gpu_aging_proc = None
+
+        if self.vpu_aging.isChecked():
+            print('stop vpu aging test')
+            if self.vpu_aging_proc and not self.vpu_aging_proc.poll():
+                self.vpu_aging_proc.kill()
+                self.vpu_aging_proc.wait()
+            self.vpu_aging_proc = None
+            
+    def cmd_aging(self):
+        self.aging_duration = int(self.aging_duration_choice.currentText()) * 3600
+        self.aging_elapse = 0
+        self.aging_pass = True
+
+        self.aging_dialog = QProgressDialog('', f'{self.get_text("aging_cancel")}',
+                                            0, self.aging_duration, self)
+        self.aging_dialog.setWindowTitle(self.get_text('aging_test'))
+        self.update_aging_hints()
+        self.aging_dialog.setValue(0)
+        self.aging_dialog.setAutoClose(True)
+        self.aging_dialog.setAutoReset(False)
+        self.aging_dialog.setAutoFillBackground(True)
+        self.aging_dialog.setPalette(QPalette(QColor('yellow')))
+        self.aging_dialog.resize(320, 200)
+
+        self.start_aging_test()
+
+        self.aging_timer = QTimer(self.aging_dialog)
+        self.aging_timer.timeout.connect(self.on_agingTestUpdate)
+        self.aging_timer.start(1000)
+
+        rc = self.aging_dialog.exec_()
+        print(rc)
+
+        self.aging_timer.stop()
+
+        self.stop_aging_test()
+
+        if self.aging_elapse >= self.aging_duration and self.aging_pass:
+            self.aging_button.setPalette(QPalette(QColor(PASS_COLOR)))
+        else:
+            self.aging_button.setPalette(QPalette(QColor(FAIL_COLOR)))
     ######################################################
     # GUI Callbacks
     ######################################################
@@ -477,6 +901,77 @@ class MainWindow(QMainWindow, SimpleLang):
         "Event handler: a test case has been selected in the tree"
         # update "run selected" button enabled state
         self.set_selected_button_state()
+
+    # wifi signal part
+    def on_wifiStatusUpdate(self):
+        self.set_wifi_signal_level()
+        QTimer.singleShot(3000, lambda: self.on_wifiStatusUpdate())
+        
+    def set_wifi_signal_level(self):
+        ssid, signal_level = self._get_strongest_wifi()
+        if not ssid:
+            return
+
+        if signal_level <= -100:
+            self.wifi_signal_level.setStyleSheet('QProgressBar { text-align: center; } QProgressBar::chunk { background-color: %s; }' % FAIL_COLOR)
+            value = 1
+        elif signal_level <= -88: # (-100, -88]
+            self.wifi_signal_level.setStyleSheet('QProgressBar { text-align: center; } QProgressBar::chunk { background-color: %s; }' % FAIL_COLOR)
+            value = 2
+        elif signal_level <= -77: # (-88, -77]
+            self.wifi_signal_level.setStyleSheet('QProgressBar { text-align: center; } QProgressBar::chunk { background-color: %s; }' % FAIL_COLOR)
+            value = 3
+        elif signal_level <= -55: # (-77, -55]
+            self.wifi_signal_level.setStyleSheet('QProgressBar { text-align: center; } QProgressBar::chunk { background-color: %s; }' % PASS_COLOR)
+            value = 4
+        else: # > -55
+            self.wifi_signal_level.setStyleSheet('QProgressBar { text-align: center; } QProgressBar::chunk { background-color: %s; }' % PASS_COLOR)
+            value = 5
+
+        self.wifi_signal_level.setFormat(f'{ssid}: {signal_level}')
+        self.wifi_signal_level.setValue(value)
+        
+    def _get_strongest_wifi(self):
+        strongest_signal_level = -2147483648
+        strongest_ssid = None
+
+        timeout = 10
+        cmd = 'wpa_cli scan'
+        scan = subprocess.run(cmd, capture_output=True, text=True, shell=True, timeout=timeout)
+        if scan.returncode != 0:
+            return strongest_ssid, strongest_signal_level
+
+        cmd = 'wpa_cli scan_results'
+        proc = subprocess.run(cmd, capture_output=True, text=True, shell=True, timeout=timeout)
+        if proc.returncode != 0:
+            return strongest_ssid, strongest_signal_level
+
+        for line in proc.stdout.splitlines():
+            if not line.strip() or line.startswith('Selected interface') or line.startswith('bssid'):
+                continue
+
+            parts = line.split('\t')
+            if len(parts) < 5:
+                continue
+
+            signal_level = int(parts[2])
+            ssid = parts[4]
+
+            if signal_level > strongest_signal_level:
+                strongest_signal_level = signal_level
+                strongest_ssid = ssid
+
+        return strongest_ssid, strongest_signal_level
+        
+    # wifi mac part
+    def _get_wifi_mac(self):
+        cmd = 'ifconfig wlan0'
+        proc = subprocess.run(cmd, capture_output=True, text=True, shell=True, timeout=2)
+        
+        for line in proc.stdout.splitlines():
+            pattern = 'HWaddr'
+            if line.find(pattern) > 0:
+                return line.split(pattern)[1].strip()
 
     def _get_sn(self):
         path = '/proc/device-tree/serial-number'
@@ -523,6 +1018,39 @@ class MainWindow(QMainWindow, SimpleLang):
     def _get_CPU_freq(self):
         with open('/sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq', 'r') as f:
             return round(int(f.readline().strip()) / 1000 / 1000, 1)
+
+    # cpu temp part
+    def on_cpuTempUpdate(self):
+        self.cpu_temp.setText(f'{self.get_text("cpu_temp")}: {self._get_CPU_Temp()} °C')
+        
+    def _get_CPU_Temp(self):
+        thermal_base_path = "/sys/class/thermal/"
+        ret = "None"
+        
+        try:
+            # Traverse the thermal_zone* directory
+            for zone in os.listdir(thermal_base_path):
+                zone_path = os.path.join(thermal_base_path, zone)
+                type_path = os.path.join(zone_path, "type")
+                
+                # Check whether the type file exists
+                if os.path.isfile(type_path):
+                    with open(type_path, 'r') as type_file:
+                        type_content = type_file.read().strip()
+                        
+                        # Check whether the type file content matches
+                        if type_content == "cluster0_thermal":
+                            temp_path = os.path.join(zone_path, "temp")
+                            
+                            if os.path.isfile(temp_path):
+                                with open(temp_path, 'r') as temp_file:
+                                    temp_content = temp_file.read().strip()
+                                    temp_content = int(temp_content)//1000   
+                                    ret = str(temp_content)                           
+        except Exception as e:
+            print(f"An error occurred when getting cpu temperature: {e}")
+        
+        return ret
 
     def on_nodeStatusUpdate(self, node):
         "Event handler: a node on the tree has received a status update"

@@ -8,6 +8,7 @@
         "ddr_size": "DDR容量",
         "emmc_size": "eMMC容量",
         "ssd_size": "SSD容量",
+        "hdmi_model": "HDMI型号",
         "run_all_button": "运行",
         "run_selected_button": "运行选择",
         "stop_button": "停止",
@@ -26,7 +27,17 @@
         "playback_button": "回放",
         "speed_button": "速度",
         "pass_button": "通过",
-        "fail_button": "失败"
+        "fail_button": "失败",
+
+        "lcd": "LCD屏",
+        "lcd_backlight": "LCD背光",
+        "aging_test": "老化测试",
+        "aging_duration": "老化时长（小时）",
+        "aging_cancel": "取消",
+        "wifi": "WiFi",
+        "wifi_mac": "WiFi Mac",
+
+        "cpu_temp": "CPU温度"
     },
     "en": {
         "title": "Factory Test",
@@ -37,6 +48,7 @@
         "ddr_size": "DDR size",
         "emmc_size": "eMMC size",
         "ssd_size": "SSD size",
+        "hdmi_model": "HDMI model",
         "run_all_button": "Run",
         "run_selected_button": "Run Selected",
         "stop_button": "Stop",
@@ -55,6 +67,16 @@
         "playback_button": "Playback",
         "speed_button": "Speed",
         "pass_button": "Pass",
-        "fail_button": "Fail"
+        "fail_button": "Fail",
+
+        "lcd": "LCD Screen",
+        "lcd_backlight": "LCD backlight",
+        "aging_test": "Aging test",
+        "aging_duration": "Aging duration (hours)",
+        "aging_cancel": "Cancel",
+        "wifi": "WiFi",
+        "wifi_mac": "WiFi Mac",
+
+        "cpu_temp": "CPU_Temp"
     }
 }

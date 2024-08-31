@@ -1,7 +1,9 @@
 from typing import Union
 import os
 import json
+from cricket.singleton import SingletonMeta, singleton
 
+@singleton
 class SimpleLang(object):
     def __init__(self, file = None):
         file = file if file else 'languages.json'

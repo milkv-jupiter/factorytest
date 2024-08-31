@@ -37,7 +37,9 @@
         "wifi": "WiFi",
         "wifi_mac": "WiFi Mac",
 
-        "cpu_temp": "CPU温度"
+        "cpu_temp": "CPU温度",
+        "wifi_signal_init":"正在检测WiFi信号强度",
+        "peripheral_test":"外设性能测试"
     },
     "en": {
         "title": "Factory Test",
@@ -77,6 +79,8 @@
         "wifi": "WiFi",
         "wifi_mac": "WiFi Mac",
 
-        "cpu_temp": "CPU_Temp"
+        "cpu_temp": "CPU_Temp",
+        "wifi_signal_init":"Checking WiFi signal strength",
+        "peripheral_test":"Peripheral performance testing"
     }
 }
